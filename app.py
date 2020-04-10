@@ -26,42 +26,59 @@ def application(request):
 
     request_is_json = request.content_type.endswith('json')
 
-    with tempfile.NamedTemporaryFile(suffix='.html') as source_file:
+    source_files = []
+    # source_file = tempfile.NamedTemporaryFile(suffix='.html')
+    
+    payload = json.loads(request.data)
 
-        if request_is_json:
-            # If a JSON payload is there, all data is in the payload
-            payload = json.loads(request.data)
-            source_file.write(payload['contents'].decode('base64'))
-            options = payload.get('options', {})
-        elif request.files:
-            # First check if any files were uploaded
-            source_file.write(request.files['file'].read())
-            # Load any options that may have been provided in options
-            options = json.loads(request.form.get('options', '{}'))
+    pages = payload['contents']
 
-        source_file.flush()
+    for page in pages:
+        ptf = tempfile.NamedTemporaryFile(suffix='.html')
+        ptf.write(page.decode('base64'))
+        ptf.flush()
+        source_files.append(ptf.name)
 
-        # Evaluate argument to run with subprocess
-        args = ['wkhtmltopdf']
+    # source_file.write(payload['contents'].decode('base64'))
+    options = payload.get('options', {})
 
-        # Add Global Options
-        if options:
-            for option, value in options.items():
-                args.append('--%s' % option)
-                if value:
-                    args.append('"%s"' % value)
+    if "header-html" in options:
+        htf = tempfile.NamedTemporaryFile(suffix='.html')
+        htf.write(options['header-html'].decode('base64'))
+        htf.flush()
+        options['header-html'] = htf.name
 
-        # Add source file name and output file name
-        file_name = source_file.name
-        args += [file_name, file_name + ".pdf"]
+    if "footer-html" in options:
+        ftf = tempfile.NamedTemporaryFile(suffix='.html')
+        ftf.write(options['footer-html'].decode('base64'))
+        ftf.flush()
+        options['footer-html'] = ftf.name
 
-        # Execute the command using executor
-        execute(' '.join(args))
+    # source_file.flush()
 
-        return Response(
-            wrap_file(request.environ, open(file_name + '.pdf')),
-            mimetype='application/pdf',
-        )
+    # Evaluate argument to run with subprocess
+    args = ['wkhtmltopdf']
+
+    # Add Global Options
+    options['load-error-handling'] = 'ignore'
+    if options:
+        for option, value in options.items():
+            args.append('--%s' % option)
+            if value:
+                args.append('"%s"' % value)
+
+    # Add source file name and output file name
+    # file_name = source_file.name
+    file_name = source_files[0]
+    args += source_files + [file_name + ".pdf"]
+
+    # Execute the command using executor
+    execute(' '.join(args))
+
+    return Response(
+        wrap_file(request.environ, open(file_name + '.pdf')),
+        mimetype='application/pdf',
+    )
 
 
 if __name__ == '__main__':
