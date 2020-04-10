@@ -34,7 +34,7 @@ def application(request):
     pages = payload['contents']
 
     for page in pages:
-        ptf = tempfile.NamedTemporaryFile(suffix='.html')
+        ptf = tempfile.NamedTemporaryFile(suffix='.html', delete=False)
         ptf.write(page.decode('base64'))
         ptf.flush()
         source_files.append(ptf.name)
